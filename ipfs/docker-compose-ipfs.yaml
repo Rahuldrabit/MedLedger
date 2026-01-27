@@ -1,0 +1,24 @@
+version: '3.7'
+
+networks:
+  ehr-network:
+    external: true
+
+services:
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: ipfs-node
+    environment:
+      - IPFS_PROFILE=server
+    volumes:
+      - ./ipfs-data:/data/ipfs
+      - ./ipfs-staging:/export
+    ports:
+      - "4001:4001" # P2P swarm
+      - "4001:4001/udp" # P2P swarm UDP
+      - "5001:5001" # API server
+      - "8080:8080" # Gateway
+    networks:
+      - ehr-network
+    command: [ "daemon", "--migrate=true", "--enable-gc" ]
+    restart: unless-stopped

@@ -1,0 +1,50 @@
+version: '3.7'
+
+networks:
+  ehr-network:
+    name: ehr-network
+
+services:
+  couchdb0.hospital:
+    container_name: couchdb0.hospital
+    image: couchdb:3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "5984:5984"
+    networks:
+      - ehr-network
+
+  couchdb1.hospital:
+    container_name: couchdb1.hospital
+    image: couchdb:3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "6984:5984"
+    networks:
+      - ehr-network
+
+  couchdb0.patient:
+    container_name: couchdb0.patient
+    image: couchdb:3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "7984:5984"
+    networks:
+      - ehr-network
+
+  couchdb1.patient:
+    container_name: couchdb1.patient
+    image: couchdb:3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "8984:5984"
+    networks:
+      - ehr-network

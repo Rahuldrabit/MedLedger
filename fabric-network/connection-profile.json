@@ -1,0 +1,101 @@
+{
+    "name": "ehr-network",
+    "version": "1.0.0",
+    "description": "Connection profile for Hyperledger Fabric EHR network",
+    "client": {
+        "organization": "HospitalOrg",
+        "connection": {
+            "timeout": {
+                "peer": {
+                    "endorser": "300"
+                }
+            }
+        }
+    },
+    "organizations": {
+        "HospitalOrg": {
+            "mspid": "HospitalMSP",
+            "peers": [
+                "peer0.hospital.ehr.com",
+                "peer1.hospital.ehr.com"
+            ],
+            "certificateAuthorities": [
+                "ca.hospital.ehr.com"
+            ]
+        },
+        "PatientOrg": {
+            "mspid": "PatientMSP",
+            "peers": [
+                "peer0.patient.ehr.com",
+                "peer1.patient.ehr.com"
+            ],
+            "certificateAuthorities": [
+                "ca.patient.ehr.com"
+            ]
+        }
+    },
+    "peers": {
+        "peer0.hospital.ehr.com": {
+            "url": "grpcs://localhost:7051",
+            "tlsCACerts": {
+                "path": "crypto-config/peerOrganizations/hospital.ehr.com/peers/peer0.hospital.ehr.com/tls/ca.crt"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer0.hospital.ehr.com",
+                "hostnameOverride": "peer0.hospital.ehr.com"
+            }
+        },
+        "peer1.hospital.ehr.com": {
+            "url": "grpcs://localhost:8051",
+            "tlsCACerts": {
+                "path": "crypto-config/peerOrganizations/hospital.ehr.com/peers/peer1.hospital.ehr.com/tls/ca.crt"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer1.hospital.ehr.com",
+                "hostnameOverride": "peer1.hospital.ehr.com"
+            }
+        },
+        "peer0.patient.ehr.com": {
+            "url": "grpcs://localhost:9051",
+            "tlsCACerts": {
+                "path": "crypto-config/peerOrganizations/patient.ehr.com/peers/peer0.patient.ehr.com/tls/ca.crt"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer0.patient.ehr.com",
+                "hostnameOverride": "peer0.patient.ehr.com"
+            }
+        },
+        "peer1.patient.ehr.com": {
+            "url": "grpcs://localhost:10051",
+            "tlsCACerts": {
+                "path": "crypto-config/peerOrganizations/patient.ehr.com/peers/peer1.patient.ehr.com/tls/ca.crt"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer1.patient.ehr.com",
+                "hostnameOverride": "peer1.patient.ehr.com"
+            }
+        }
+    },
+    "certificateAuthorities": {
+        "ca.hospital.ehr.com": {
+            "url": "https://localhost:7054",
+            "caName": "ca-hospital",
+            "tlsCACerts": {
+                "path": "crypto-config/peerOrganizations/hospital.ehr.com/ca/ca.hospital.ehr.com-cert.pem"
+            },
+            "httpOptions": {
+                "verify": false
+            }
+        },
+        "ca.patient.ehr.com": {
+            "url": "https://localhost:8054",
+            "caName": "ca-patient",
+            "tlsCACerts": {
+                "path": "crypto-config/peerOrganizations/patient.ehr.com/ca/ca.patient.ehr.com-cert.pem"
+            },
+            "httpOptions": {
+                "verify": false
+            }
+        }
+    }
+}

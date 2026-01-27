@@ -1,0 +1,54 @@
+version: '3.7'
+
+networks:
+  ehr-network:
+    name: ehr-network
+
+services:
+  ca.hospital.ehr.com:
+    image: hyperledger/fabric-ca:latest
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca.hospital.ehr.com
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=7054
+    ports:
+      - "7054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ./crypto-config/peerOrganizations/hospital.ehr.com/ca/:/etc/hyperledger/fabric-ca-server
+    container_name: ca.hospital.ehr.com
+    networks:
+      - ehr-network
+
+  ca.patient.ehr.com:
+    image: hyperledger/fabric-ca:latest
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca.patient.ehr.com
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=8054
+    ports:
+      - "8054:8054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ./crypto-config/peerOrganizations/patient.ehr.com/ca/:/etc/hyperledger/fabric-ca-server
+    container_name: ca.patient.ehr.com
+    networks:
+      - ehr-network
+
+  ca.orderer.ehr.com:
+    image: hyperledger/fabric-ca:latest
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca.orderer.ehr.com
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=9054
+    ports:
+      - "9054:9054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ./crypto-config/ordererOrganizations/orderer.ehr.com/ca/:/etc/hyperledger/fabric-ca-server
+    container_name: ca.orderer.ehr.com
+    networks:
+      - ehr-network

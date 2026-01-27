@@ -1,0 +1,25 @@
+---
+Organizations:
+  - Name: OrdererOrg
+    Domain: orderer.ehr.com
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+    Users:
+      Count: 1
+
+  - Name: HospitalOrg
+    Domain: hospital.ehr.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+    Users:
+      Count: 3
+
+  - Name: PatientOrg
+    Domain: patient.ehr.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+    Users:
+      Count: 3
