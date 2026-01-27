@@ -21,6 +21,7 @@ import DoctorRecords from './pages/Doctor/Records';
 import AdminDashboard from './pages/Admin/Dashboard';
 import AdminAudit from './pages/Admin/Audit';
 import AdminStats from './pages/Admin/Stats';
+import FederatedLearning from './pages/Admin/FederatedLearning';
 
 // Components
 import PrivateRoute from './components/PrivateRoute';
@@ -68,7 +69,9 @@ function App() {
             }>
                 <Route index element={<AdminDashboard />} />
                 <Route path="audit" element={<AdminAudit />} />
+                <Route path="audit" element={<AdminAudit />} />
                 <Route path="stats" element={<AdminStats />} />
+                <Route path="fl" element={<FederatedLearning />} />
             </Route>
 
             {/* Default Route */}

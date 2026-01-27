@@ -28,7 +28,10 @@ import {
     Assessment,
     BarChart,
     ExitToApp,
-    Person
+    BarChart,
+    ExitToApp,
+    Person,
+    Science
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
@@ -77,7 +80,9 @@ const Layout = () => {
                 return [
                     { text: 'Dashboard', icon: <Dashboard />, path: '/admin' },
                     { text: 'Audit Logs', icon: <Assessment />, path: '/admin/audit' },
-                    { text: 'Statistics', icon: <BarChart />, path: '/admin/stats' }
+                    { text: 'Audit Logs', icon: <Assessment />, path: '/admin/audit' },
+                    { text: 'Statistics', icon: <BarChart />, path: '/admin/stats' },
+                    { text: 'Federated Learning', icon: <Science />, path: '/admin/fl' }
                 ];
             default:
                 return [];
