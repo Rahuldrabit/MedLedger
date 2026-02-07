@@ -3,18 +3,16 @@ package main
 import (
 	"log"
 
-	"github.com/hyperledger/fabric-chaincode-go/shim"
-	"github.com/ehr-blockchain/chaincode/ehr"
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
 func main() {
-	// Create a new Smart Contract
-	chaincode, err := shim.Start(new(ehr.SmartContract))
+	chaincode, err := contractapi.NewChaincode(new(SmartContract))
 	if err != nil {
-		log.Fatalf("Error starting EHR chaincode: %v", err)
+		log.Panicf("Error creating ehr chaincode: %v", err)
 	}
 
-	if chaincode != nil {
-		log.Println("EHR chaincode started successfully")
+	if err := chaincode.Start(); err != nil {
+		log.Panicf("Error starting ehr chaincode: %v", err)
 	}
 }

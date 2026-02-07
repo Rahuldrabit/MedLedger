@@ -1,4 +1,4 @@
-package ehr
+package main
 
 import (
 	"fmt"

@@ -8,7 +8,7 @@ import sys
 def check_imports():
     """Check if all required packages can be imported"""
     print("🔍 Checking Python environment...\n")
-    
+
     packages = {
         "fastapi": "FastAPI",
         "uvicorn": "Uvicorn",
@@ -24,9 +24,9 @@ def check_imports():
         "black": "Black",
         "isort": "isort",
     }
-    
+
     failed = []
-    
+
     for module, name in packages.items():
         try:
             __import__(module)
@@ -34,7 +34,7 @@ def check_imports():
         except ImportError as e:
             print(f"❌ {name} - {e}")
             failed.append(name)
-    
+
     print(f"\n{'='*50}")
     if not failed:
         print("✨ All packages installed successfully!")

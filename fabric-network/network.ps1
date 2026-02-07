@@ -7,7 +7,7 @@ param(
     
     [string]$ChannelName = "ehr-channel",
     [string]$Database = "couchdb",
-    [switch]$Verbose,
+    [switch]$VerboseLogging,
     [switch]$Help
 )
 
@@ -21,7 +21,7 @@ Usage:
       up - Bring up the network
       down - Tear down the network
       restart - Restart the network
-      generateCerts - Generate certificates (requires Fabric binaries)
+      generateCerts - Generate certificates using Docker
       createChannel - Create application channel
       deployCC - Deploy chaincode
       clean - Remove all artifacts and containers
@@ -29,7 +29,7 @@ Usage:
     Flags:
     -ChannelName <name> - Channel name (default: ehr-channel)
     -Database <type> - State database: goleveldb or couchdb (default: couchdb)
-    -Verbose - Enable verbose logging
+    -VerboseLogging - Enable verbose logging
     -Help - Print this message
     
 Examples:
@@ -44,9 +44,93 @@ function Write-Info {
     Write-Host "ℹ️  $Message" -ForegroundColor Cyan
 }
 
-function Write-Success {
-    param([string]$Message)
-    Write-Host "✅ $Message" -ForegroundColor Green
+function Generate-Certificates-Docker {
+    Write-Info "Generating crypto material using Docker..."
+    
+    # Generate crypto material and create directories
+    docker run --rm -v "${PWD}:/work" -w /work hyperledger/fabric-tools:2.5 `
+        sh -c "rm -rf crypto-config channel-artifacts && mkdir -p channel-artifacts && cryptogen generate --config=./crypto-config.yaml --output=./crypto-config"
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error-Custom "Failed to generate crypto material"
+        exit 1
+    }
+    
+    # Generate genesis block
+    docker run --rm -v "${PWD}:/work" -w /work -e FABRIC_CFG_PATH=/work hyperledger/fabric-tools:2.5 `
+        configtxgen -profile EHROrdererGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error-Custom "Failed to generate genesis block"
+        exit 1
+    }
+    
+    # Generate channel transaction
+    docker run --rm -v "${PWD}:/work" -w /work -e FABRIC_CFG_PATH=/work hyperledger/fabric-tools:2.5 `
+        configtxgen -profile EHRChannel -outputCreateChannelTx ./channel-artifacts/$ChannelName.tx -channelID $ChannelName
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error-Custom "Failed to generate channel transaction"
+        exit 1
+    }
+    
+    # Generate anchor peer updates
+    docker run --rm -v "${PWD}:/work" -w /work -e FABRIC_CFG_PATH=/work hyperledger/fabric-tools:2.5 `
+        configtxgen -profile EHRChannel -outputAnchorPeersUpdate ./channel-artifacts/HospitalMSPanchors.tx -channelID $ChannelName -asOrg HospitalMSP
+    
+    docker run --rm -v "${PWD}:/work" -w /work -e FABRIC_CFG_PATH=/work hyperledger/fabric-tools:2.5 `
+        configtxgen -profile EHRChannel -outputAnchorPeersUpdate ./channel-artifacts/PatientMSPanchors.tx -channelID $ChannelName -asOrg PatientMSP
+    
+    Write-Success "Crypto material and channel artifacts generated successfully!"
+}
+
+function Create-Channel-Docker {
+    Write-Info "Creating channel '$ChannelName' using Docker..."
+    
+    # Wait for network to be ready
+    Write-Info "Waiting for network to be ready..."
+    Start-Sleep -Seconds 10
+    
+    # Join orderer to channel using Channel Participation API (osnadmin)
+    docker exec cli osnadmin channel join --channelID $ChannelName --config-block /opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts/$ChannelName.block -o orderer.ehr.com:17050 --ca-file /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/msp/tlscacerts/tlsca.ehr.com-cert.pem --client-cert /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/server.crt --client-key /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/server.key
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error-Custom "Failed to join orderer to channel"
+        exit 1
+    }
+    
+    Write-Success "Channel '$ChannelName' created successfully!"
+}
+
+function Deploy-Chaincode-Docker {
+    param([string]$ChaincodeName = "ehr", [string]$ChaincodePath = "../chaincode/ehr")
+    
+    Write-Info "Deploying chaincode '$ChaincodeName' using Docker..."
+    
+    # Package chaincode
+    docker exec cli peer lifecycle chaincode package $ChaincodeName.tar.gz `
+        --path /opt/gopath/src/github.com/hyperledger/fabric/peer/$ChaincodePath `
+        --lang golang --label ${ChaincodeName}_1.0
+    
+    # Install on Hospital peers
+    docker exec -e CORE_PEER_ADDRESS=peer0.hospital.ehr.com:7051 `
+        -e CORE_PEER_LOCALMSPID=HospitalMSP cli `
+        peer lifecycle chaincode install $ChaincodeName.tar.gz
+    
+    docker exec -e CORE_PEER_ADDRESS=peer1.hospital.ehr.com:8051 `
+        -e CORE_PEER_LOCALMSPID=HospitalMSP cli `
+        peer lifecycle chaincode install $ChaincodeName.tar.gz
+    
+    # Install on Patient peers
+    docker exec -e CORE_PEER_ADDRESS=peer0.patient.ehr.com:9051 `
+        -e CORE_PEER_LOCALMSPID=PatientMSP cli `
+        peer lifecycle chaincode install $ChaincodeName.tar.gz
+    
+    docker exec -e CORE_PEER_ADDRESS=peer1.patient.ehr.com:10051 `
+        -e CORE_PEER_LOCALMSPID=PatientMSP cli `
+        peer lifecycle chaincode install $ChaincodeName.tar.gz
+    
+    Write-Success "Chaincode '$ChaincodeName' deployed successfully!"
 }
 
 function Write-Error-Custom {
@@ -59,15 +143,19 @@ function Write-Warning-Custom {
     Write-Host "⚠️  $Message" -ForegroundColor Yellow
 }
 
+function Write-Success {
+    param([string]$Message)
+    Write-Host "✅ $Message" -ForegroundColor Green
+}
+
 function Network-Up {
     Write-Info "Starting EHR Blockchain Network..."
     
     # Check if crypto-config exists
     if (-not (Test-Path "crypto-config")) {
         Write-Warning-Custom "Crypto material not found."
-        Write-Info "Please install Hyperledger Fabric binaries and run: cryptogen generate --config=crypto-config.yaml"
-        Write-Info "Or use the test-network from Fabric samples to generate certificates."
-        Write-Warning-Custom "For now, starting network without certificates (will fail)..."
+        Write-Info "Generating certificates using Docker..."
+        Generate-Certificates-Docker
     }
     
     # Start CouchDB if needed
@@ -144,23 +232,13 @@ switch ($Mode.ToLower()) {
         Clean-All
     }
     "generatecerts" {
-        Write-Warning-Custom "Certificate generation requires Hyperledger Fabric binaries."
-        Write-Info "Please download Fabric binaries from:"
-        Write-Info "https://hyperledger-fabric.readthedocs.io/en/release-2.5/install.html"
-        Write-Info ""
-        Write-Info "Then run:"
-        Write-Info "  cryptogen generate --config=crypto-config.yaml --output=crypto-config"
-        Write-Info "  configtxgen -profile EHROrdererGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block"
-        Write-Info "  configtxgen -profile EHRChannel -outputCreateChannelTx ./channel-artifacts/$ChannelName.tx -channelID $ChannelName"
+        Generate-Certificates-Docker
     }
     "createchannel" {
-        Write-Warning-Custom "Channel creation requires peer CLI tool from Fabric binaries."
-        Write-Info "Please use the CLI container or install peer binary."
+        Create-Channel-Docker
     }
     "deploycc" {
-        Write-Warning-Custom "Chaincode deployment requires peer CLI tool."
-        Write-Info "Use: docker exec -it cli bash"
-        Write-Info "Then run the deployment commands inside the container."
+        Deploy-Chaincode-Docker
     }
     default {
         if ($Mode -eq "") {

@@ -47,35 +47,46 @@ fabric-network/
 
 ## Quick Start
 
-### 1. Generate Certificates
+### 1. Start Network (Auto-generates certificates and creates channel)
 
-```bash
+```powershell
+# Windows PowerShell
 cd fabric-network
-./scripts/network.sh generateCerts
+.\network.ps1 up
 ```
 
-### 2. Start Network
+This single command will:
+- Generate certificates using Docker (cryptogen in container)
+- Create channel genesis block
+- Start all network containers
+- Create and join channel
 
-```bash
-./scripts/network.sh up
+### 2. Verify Network
+
+```powershell
+# Check running containers
+docker ps
+
+# Should see 10 containers running:
+# - orderer.ehr.com
+# - peer0/peer1.hospital.ehr.com  
+# - peer0/peer1.patient.ehr.com
+# - couchdb0/couchdb1.hospital
+# - couchdb0/couchdb1.patient
+# - cli
+
+# Verify channel
+docker exec cli peer channel list
 ```
 
-### 3. Create Channel
+### 3. Deploy Chaincode (CCAAS Method)
 
-```bash
-./scripts/network.sh createChannel
-```
+See DEPLOYMENT_GUIDE.md for detailed chaincode deployment using Chaincode-as-a-Service approach.
 
-### 4. Deploy Chaincode
+### 4. Stop Network
 
-```bash
-./scripts/network.sh deployCC
-```
-
-### 5. Stop Network
-
-```bash
-./scripts/network.sh down
+```powershell
+.\network.ps1 down
 ```
 
 ## Network Components

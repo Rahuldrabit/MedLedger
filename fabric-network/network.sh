@@ -94,49 +94,45 @@ function generateCerts() {
     return
   fi
 
-  if command -v cryptogen &> /dev/null; then
-    echo "📝 Generating crypto material using cryptogen..."
-    cryptogen generate --config=./crypto-config.yaml --output="crypto-config"
-    if [ $? -ne 0 ]; then
-      echo "❌ Failed to generate crypto material"
-      exit 1
-    fi
-  else
-    echo "❌ cryptogen tool not found. Please install Hyperledger Fabric binaries."
+  echo "📝 Generating crypto material using Docker..."
+  docker run --rm -v "${PWD}:/work" -w /work hyperledger/fabric-tools:2.5 \
+    cryptogen generate --config=./crypto-config.yaml --output=./crypto-config
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to generate crypto material"
     exit 1
   fi
   echo "✅ Crypto material generated successfully"
 }
 
-# Generate genesis block and channel transaction
+# Generate genesis block and channel transaction using Docker
 function generateChannelArtifacts() {
-  if command -v configtxgen &> /dev/null; then
-    echo "📝 Generating genesis block..."
-    
-    mkdir -p channel-artifacts
-    
+  echo "📝 Generating genesis block using Docker..."
+  
+  mkdir -p channel-artifacts
+  
+  docker run --rm -v "${PWD}:/work" -w /work hyperledger/fabric-tools:2.5 \
     configtxgen -profile EHROrdererGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block
-    if [ $? -ne 0 ]; then
-      echo "❌ Failed to generate genesis block"
-      exit 1
-    fi
-    
-    echo "📝 Generating channel creation transaction..."
-    configtxgen -profile EHRChannel -outputCreateChannelTx ./channel-artifacts/${CHANNEL_NAME}.tx -channelID $CHANNEL_NAME
-    if [ $? -ne 0 ]; then
-      echo "❌ Failed to generate channel creation transaction"
-      exit 1
-    fi
-    
-    echo "📝 Generating anchor peer updates..."
-    configtxgen -profile EHRChannel -outputAnchorPeersUpdate ./channel-artifacts/HospitalMSPanchors.tx -channelID $CHANNEL_NAME -asOrg HospitalMSP
-    configtxgen -profile EHRChannel -outputAnchorPeersUpdate ./channel-artifacts/PatientMSPanchors.tx -channelID $CHANNEL_NAME -asOrg PatientMSP
-    
-    echo "✅ Channel artifacts generated successfully"
-  else
-    echo "❌ configtxgen tool not found. Please install Hyperledger Fabric binaries."
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to generate genesis block"
     exit 1
   fi
+  
+  echo "📝 Generating channel creation transaction..."
+  docker run --rm -v "${PWD}:/work" -w /work hyperledger/fabric-tools:2.5 \
+    configtxgen -profile EHRChannel -outputCreateChannelTx ./channel-artifacts/${CHANNEL_NAME}.tx -channelID $CHANNEL_NAME
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to generate channel creation transaction"
+    exit 1
+  fi
+  
+  echo "📝 Generating anchor peer updates..."
+  docker run --rm -v "${PWD}:/work" -w /work hyperledger/fabric-tools:2.5 \
+    configtxgen -profile EHRChannel -outputAnchorPeersUpdate ./channel-artifacts/HospitalMSPanchors.tx -channelID $CHANNEL_NAME -asOrg HospitalMSP
+  
+  docker run --rm -v "${PWD}:/work" -w /work hyperledger/fabric-tools:2.5 \
+    configtxgen -profile EHRChannel -outputAnchorPeersUpdate ./channel-artifacts/PatientMSPanchors.tx -channelID $CHANNEL_NAME -asOrg PatientMSP
+  
+  echo "✅ Channel artifacts generated successfully"
 }
 
 # Start network

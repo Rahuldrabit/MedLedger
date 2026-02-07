@@ -31,24 +31,21 @@ services:
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
       - ORDERER_GENERAL_BOOTSTRAPMETHOD=none
       - ORDERER_CHANNELPARTICIPATION_ENABLED=true
-      - ORDERER_ADMIN_TLS_ENABLED=true
-      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
-      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
-      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
-      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
-      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:9443
-      - ORDERER_OPERATIONS_LISTENADDRESS=orderer.ehr.com:9443
+      - ORDERER_ADMIN_TLS_ENABLED=false
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:17050
+      - ORDERER_OPERATIONS_LISTENADDRESS=0.0.0.0:17051
       - ORDERER_METRICS_PROVIDER=prometheus
     working_dir: /root
     command: orderer
     volumes:
       - ./channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
-      - ./crypto-config/ordererOrganizations/orderer.ehr.com/orderers/orderer.orderer.ehr.com/msp:/var/hyperledger/orderer/msp
-      - ./crypto-config/ordererOrganizations/orderer.ehr.com/orderers/orderer.orderer.ehr.com/tls/:/var/hyperledger/orderer/tls
+      - ./crypto-config/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/msp:/var/hyperledger/orderer/msp
+      - ./crypto-config/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/:/var/hyperledger/orderer/tls
       - orderer.ehr.com:/var/hyperledger/production/orderer
     ports:
       - "7050:7050"
-      - "9443:9443"
+      - "17050:17050"
+      - "17051:17051"
     networks:
       - ehr-network
 
@@ -91,8 +88,6 @@ services:
     ports:
       - "7051:7051"
       - "9444:9444"
-    depends_on:
-      - couchdb0.hospital
     networks:
       - ehr-network
 
@@ -135,8 +130,6 @@ services:
     ports:
       - "8051:8051"
       - "9445:9445"
-    depends_on:
-      - couchdb1.hospital
     networks:
       - ehr-network
 
@@ -179,8 +172,6 @@ services:
     ports:
       - "9051:9051"
       - "9446:9446"
-    depends_on:
-      - couchdb0.patient
     networks:
       - ehr-network
 
@@ -223,8 +214,6 @@ services:
     ports:
       - "10051:10051"
       - "9447:9447"
-    depends_on:
-      - couchdb1.patient
     networks:
       - ehr-network
 
@@ -237,6 +226,14 @@ services:
       - GOPATH=/opt/gopath
       - FABRIC_LOGGING_SPEC=INFO
       - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_PEER_ID=cli
+      - CORE_PEER_ADDRESS=peer0.hospital.ehr.com:7051
+      - CORE_PEER_LOCALMSPID=HospitalMSP
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/hospital.ehr.com/users/Admin@hospital.ehr.com/tls/client.crt
+      - CORE_PEER_TLS_KEY_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/hospital.ehr.com/users/Admin@hospital.ehr.com/tls/client.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/hospital.ehr.com/tlsca/tlsca.hospital.ehr.com-cert.pem
+      - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/hospital.ehr.com/users/Admin@hospital.ehr.com/msp
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
     command: /bin/bash
     volumes:

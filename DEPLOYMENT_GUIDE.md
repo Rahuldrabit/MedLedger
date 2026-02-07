@@ -26,30 +26,28 @@ This guide walks you through deploying the entire blockchain-based Electronic He
 
 ## Prerequisites
 
+## Prerequisites
+
 ### Required Software
 
 1. **Docker Desktop** (20.10+)
    - Download: https://www.docker.com/products/docker-desktop
    - Ensure WSL 2 backend is enabled (Windows)
+   - **Important**: No Hyperledger Fabric binaries needed - all tools run in Docker
 
 2. **Node.js** (16.x or 18.x)
    - Download: https://nodejs.org/
 
-3. **Go** (1.19+)
+3. **Go** (1.20+)
    - Download: https://go.dev/dl/
+   - Required for chaincode development
 
-4. **Python** (3.9+)
+4. **Python** (3.9+, tested with 3.14)
    - Download: https://www.python.org/downloads/
 
 5. **Poetry** (Python dependency manager)
    ```powershell
    (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
-   ```
-
-6. **Hyperledger Fabric Binaries** (2.5.x)
-   ```powershell
-   # Download to fabric-network/bin/
-   # Visit: https://hyperledger-fabric.readthedocs.io/en/latest/install.html
    ```
 
 ### System Requirements
@@ -100,105 +98,208 @@ cd ipfs
 
 ### Phase 2: Blockchain Network
 
-#### 2.1 Generate Certificates
+### Phase 2: Blockchain Network Setup
+
+#### 2.1 Start Network and Generate Certificates
 
 ```powershell
 cd ..\fabric-network
 
-# Generate crypto material
-cryptogen generate --config=crypto-config.yaml --output=crypto-config
-
-# Verify certificates created
-ls crypto-config\
-```
-
-#### 2.2 Generate Genesis Block and Channel Artifacts
-
-```powershell
-# Set environment
-$env:FABRIC_CFG_PATH = "$PWD"
-
-# Generate genesis block
-configtxgen -profile ThreeOrgsOrdererGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block
-
-# Generate channel transaction
-configtxgen -profile ThreeOrgsChannel -outputCreateChannelTx ./channel-artifacts/ehr-channel.tx -channelID ehr-channel
-
-# Generate anchor peer updates
-configtxgen -profile ThreeOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/HospitalMSPanchors.tx -channelID ehr-channel -asOrg HospitalMSP
-
-configtxgen -profile ThreeOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/PatientMSPanchors.tx -channelID ehr-channel -asOrg PatientMSP
-```
-
-#### 2.3 Start Fabric Network
-
-```powershell
-# Start network
+# Windows PowerShell - Start network (auto-generates certificates)
 .\network.ps1 up
+
+# This will:
+# 1. Generate certificates using Docker (cryptogen in container)
+# 2. Create channel genesis block
+# 3. Start CouchDB containers
+# 4. Start orderer and peer nodes
+# 5. Start CLI container
 
 # Verify containers running
 docker ps
 
-# Should see: orderer, 4 peers, 4 couchdb, 3 CAs, 1 CLI
+# Should see 10 containers:
+# - orderer.ehr.com
+# - peer0/peer1.hospital.ehr.com
+# - peer0/peer1.patient.ehr.com
+# - couchdb0/couchdb1.hospital
+# - couchdb0/couchdb1.patient
+# - cli
 ```
 
-#### 2.4 Create Channel
+#### 2.2 Create Channel and Join Peers
 
 ```powershell
-# In Git Bash or WSL
-cd /e/BlockChainProject/fabric-network
-./scripts/createChannel.sh ehr-channel
-
-# Verify channel created
+# Channel is auto-created during network startup
+# Verify channel status
 docker exec cli peer channel list
+
+# Should show: ehr-channel
+
+# Check all peers joined
+docker exec cli peer channel getinfo -c ehr-channel
 ```
 
-### Phase 3: Chaincode Deployment
+### Phase 3: Chaincode Deployment (CCAAS Method)
 
-#### 3.1 Build Chaincode
+**Note**: We use Chaincode-as-a-Service (CCAAS) approach for better local development experience.
+
+#### 3.1 Build Chaincode Docker Image
 
 ```powershell
 cd ..\chaincode\ehr
 
-# Download dependencies
+# Verify Go dependencies
 go mod tidy
 go mod vendor
 
-# Verify build
-go build
+# Build Docker image
+docker build -t ehr-chaincode:1.0 .
+
+# Verify image created
+docker images | Select-String "ehr-chaincode"
 ```
 
-#### 3.2 Deploy Chaincode
-
-```bash
-# In Git Bash or WSL
-cd /e/BlockChainProject/fabric-network
-./scripts/deployCC.sh ehr-contract 1.0 ehr-channel
-```
-
-Expected output:
-```
-✅ Chaincode packaged
-✅ Installed on all peers
-✅ Approved by all organizations
-✅ Committed to channel
-✅ Deployment complete!
-```
-
-#### 3.3 Test Chaincode
+#### 3.2 Package Chaincode for CCAAS
 
 ```powershell
-# Invoke test transaction
-docker exec cli peer chaincode invoke `
-  -C ehr-channel `
-  -n ehr-contract `
-  -c '{"Args":["CreateEHRMetadata","TEST-001","patient123","QmTest","encKey123","Test Record","abc123"]}'
+# Create connection.json
+@'
+{
+  "address": "ehr-chaincode:7052",
+  "dial_timeout": "10s",
+  "tls_required": false
+}
+'@ | Out-File -FilePath connection.json -Encoding ASCII
 
-# Query
-docker exec cli peer chaincode query `
+# Create metadata.json
+'{"path":"","type":"ccaas","label":"ehr_1.0"}' | Out-File -FilePath metadata.json -Encoding ASCII
+
+# Package
+tar czf code.tar.gz connection.json
+tar czf ehr-ccaas.tgz code.tar.gz metadata.json
+
+# Copy to CLI container
+docker cp ehr-ccaas.tgz cli:/opt/gopath/src/github.com/hyperledger/fabric/peer/
+```
+
+#### 3.3 Install Chaincode on All Peers
+
+```powershell
+cd ..\..\fabric-network
+
+# Install on peer0.hospital
+docker exec cli peer lifecycle chaincode install ehr-ccaas.tgz
+
+# Install on peer1.hospital
+docker exec -e CORE_PEER_ADDRESS=peer1.hospital.ehr.com:8051 cli peer lifecycle chaincode install ehr-ccaas.tgz
+
+# Install on peer0.patient
+docker exec -e CORE_PEER_ADDRESS=peer0.patient.ehr.com:9051 `
+  -e CORE_PEER_LOCALMSPID=PatientMSP `
+  -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/tlsca/tlsca.patient.ehr.com-cert.pem `
+  -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/users/Admin@patient.ehr.com/msp `
+  cli peer lifecycle chaincode install ehr-ccaas.tgz
+
+# Install on peer1.patient
+docker exec -e CORE_PEER_ADDRESS=peer1.patient.ehr.com:10051 `
+  -e CORE_PEER_LOCALMSPID=PatientMSP `
+  -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/tlsca/tlsca.patient.ehr.com-cert.pem `
+  -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/users/Admin@patient.ehr.com/msp `
+  cli peer lifecycle chaincode install ehr-ccaas.tgz
+
+# Note the Package ID from output (e.g., ehr_1.0:500cb1d82e3b90c276638ccc81a03129c2478b8a95a7529956f9a210a8036db6)
+```
+
+#### 3.4 Start Chaincode Container
+
+```powershell
+# Replace PACKAGE_ID with actual ID from previous step
+$PACKAGE_ID = "ehr_1.0:500cb1d82e3b90c276638ccc81a03129c2478b8a95a7529956f9a210a8036db6"
+
+docker run --rm -d --name ehr-chaincode `
+  --hostname ehr-chaincode `
+  --network ehr-network `
+  -e CHAINCODE_SERVER_ADDRESS=0.0.0.0:7052 `
+  -e CHAINCODE_ID=$PACKAGE_ID `
+  -e CORE_CHAINCODE_ID_NAME=$PACKAGE_ID `
+  ehr-chaincode:1.0
+```
+
+#### 3.5 Approve and Commit Chaincode
+
+```powershell
+# Approve for HospitalMSP
+docker exec cli peer lifecycle chaincode approveformyorg `
+  -o orderer.ehr.com:7050 `
+  --channelID ehr-channel `
+  --name ehr `
+  --version 1.0 `
+  --package-id $PACKAGE_ID `
+  --sequence 1 `
+  --tls `
+  --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/ca.crt
+
+# Approve for PatientMSP
+docker exec -e CORE_PEER_ADDRESS=peer0.patient.ehr.com:9051 `
+  -e CORE_PEER_LOCALMSPID=PatientMSP `
+  -e CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/tlsca/tlsca.patient.ehr.com-cert.pem `
+  -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/users/Admin@patient.ehr.com/msp `
+  cli peer lifecycle chaincode approveformyorg `
+  -o orderer.ehr.com:7050 `
+  --channelID ehr-channel `
+  --name ehr `
+  --version 1.0 `
+  --package-id $PACKAGE_ID `
+  --sequence 1 `
+  --tls `
+  --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/ca.crt
+
+# Check commit readiness
+docker exec cli peer lifecycle chaincode checkcommitreadiness `
+  --channelID ehr-channel `
+  --name ehr `
+  --version 1.0 `
+  --sequence 1 `
+  --tls `
+  --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/ca.crt `
+  --output json
+
+# Commit chaincode definition
+docker exec cli peer lifecycle chaincode commit `
+  -o orderer.ehr.com:7050 `
+  --channelID ehr-channel `
+  --name ehr `
+  --version 1.0 `
+  --sequence 1 `
+  --tls `
+  --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/ca.crt `
+  --peerAddresses peer0.hospital.ehr.com:7051 `
+  --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/hospital.ehr.com/tlsca/tlsca.hospital.ehr.com-cert.pem `
+  --peerAddresses peer0.patient.ehr.com:9051 `
+  --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/tlsca/tlsca.patient.ehr.com-cert.pem
+```
+
+#### 3.6 Test Chaincode
+
+```powershell
+# Initialize chaincode
+docker exec cli peer chaincode invoke `
+  -o orderer.ehr.com:7050 `
+  --tls `
+  --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/ehr.com/orderers/orderer.ehr.com/tls/ca.crt `
   -C ehr-channel `
-  -n ehr-contract `
-  -c '{"Args":["QueryEHR","TEST-001"]}'
+  -n ehr `
+  --peerAddresses peer0.hospital.ehr.com:7051 `
+  --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/hospital.ehr.com/tlsca/tlsca.hospital.ehr.com-cert.pem `
+  --peerAddresses peer0.patient.ehr.com:9051 `
+  --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/patient.ehr.com/tlsca/tlsca.patient.ehr.com-cert.pem `
+  -c '{\"function\":\"Init\",\"Args\":[]}'
+
+# Query caller ID
+docker exec cli peer chaincode query -C ehr-channel -n ehr -c '{\"function\":\"GetCallerID\",\"Args\":[]}'
+
+# Expected: Base64 encoded certificate DN
 ```
 
 ### Phase 4: Backend API

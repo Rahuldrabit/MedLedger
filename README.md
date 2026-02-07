@@ -2,6 +2,8 @@
 
 A patient-centric secure Electronic Health Record (EHR) sharing system using Hyperledger Fabric permissioned blockchain with optional federated learning capabilities.
 
+> **🚀 Quick Start**: See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for complete Docker-based deployment guide - no Fabric binaries installation required!
+
 ## Features
 
 - **Patient Control**: Patients own and control access to their medical records
@@ -53,12 +55,14 @@ A patient-centric secure Electronic Health Record (EHR) sharing system using Hyp
 
 ## Prerequisites
 
-- **Docker** 20.10+ and Docker Compose 2.0+
+- **Docker Desktop** 20.10+ (with Docker Compose)
 - **Node.js** 16+ and npm 8+
-- **Go** 1.20+
-- **Python** 3.9+
-- **Poetry** (Python dependency management)
+- **Go** 1.20+ (for chaincode development)
+- **Python** 3.9+ (tested with Python 3.14)
+- **Poetry** 1.8+ (Python dependency management)
 - At least **8GB RAM** for Fabric network
+
+**Note**: Hyperledger Fabric binaries are NOT required - all operations use Docker containers.
 
 ## Quick Start
 
@@ -84,16 +88,29 @@ cp .env.example .env
 
 ### 3. Start Hyperledger Fabric Network
 
-```bash
+```powershell
 cd fabric-network
-./network.sh up
-./network.sh createChannel
+
+# Windows PowerShell
+.\network.ps1 up
+
+# This will:
+# - Generate certificates using Docker
+# - Start CouchDB containers (4 instances)
+# - Start orderer and peer nodes
+# - Create channel and join all peers
 ```
 
 ### 4. Deploy Chaincode
 
-```bash
-./scripts/deploy-chaincode.sh
+```powershell
+# Build chaincode Docker image
+cd ..\chaincode\ehr
+docker build -t ehr-chaincode:1.0 .
+
+# Package and deploy (see DEPLOYMENT_GUIDE.md for detailed steps)
+cd ..\..\fabric-network
+# Follow chaincode deployment section in documentation
 ```
 
 ### 5. Start Backend API
@@ -185,6 +202,14 @@ All actions are logged immutably:
 - User authentication events
 
 ## Development
+
+### Documentation
+
+- **[DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)** - Complete Docker-based deployment guide (Recommended)
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Detailed deployment instructions
+- **[SETUP_SUMMARY.md](SETUP_SUMMARY.md)** - Python environment setup summary
+- **[fabric-network/README.md](fabric-network/README.md)** - Network configuration details
+- **[USER_MANUAL.md](USER_MANUAL.md)** - End-user documentation
 
 ### Running Tests
 

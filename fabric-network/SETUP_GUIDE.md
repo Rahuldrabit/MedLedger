@@ -12,92 +12,59 @@
    docker-compose --version
    ```
 
-### 2. Install Hyperledger Fabric Binaries
+### 2. Install Go (for chaincode development)
 
-Hyperledger Fabric provides pre-built binaries for network management:
+1. Download from: https://go.dev/dl/
+2. Install and verify:
+   ```powershell
+   go version
+   ```
 
-```powershell
-# Create a directory for Fabric binaries
-mkdir -p C:\fabric-bins
-cd C:\fabric-bins
-
-# Download Fabric binaries (version 2.5.x)
-# Visit: https://github.com/hyperledger/fabric/releases
-# Download fabric-binaries-windows-amd64-2.5.x.tar.gz
-
-# Extract the archive
-# You should have: bin/ and config/ directories
-
-# Add to PATH
-$env:PATH += ";C:\fabric-bins\bin"
-```
-
-Alternatively, use the Fabric test-network to get the binaries:
-
-```powershell
-# Clone Fabric samples
-git clone https://github.com/hyperledger/fabric-samples.git
-cd fabric-samples
-
-# Run the installation script
-.\scripts\bootstrap.sh
-```
-
-### 3. Verify Tools
-
-```powershell
-cryptogen version
-configtxgen version
-peer version
-```
+**Important**: You do NOT need to install Hyperledger Fabric binaries. All tools (cryptogen, configtxgen, peer, orderer) run inside Docker containers.
 
 ## Network Setup Steps
 
-### Step 1: Generate Certificates
+### Step 1: Start Network (Single Command)
 
 From the `fabric-network` directory:
 
 ```powershell
-# Windows
+# Windows PowerShell
 cd e:\BlockChainProject\fabric-network
 
-# Generate cryptographic material
-cryptogen generate --config=.\crypto-config.yaml --output="crypto-config"
-```
-
-This creates:
-- `crypto-config/peerOrganizations/` - Peer organization certificates
-- `crypto-config/ordererOrganizations/` - Orderer organization certificates
-
-### Step 2: Generate Genesis Block and Channel Artifacts
-
-```powershell
-# Create output directory
-mkdir channel-artifacts
-
-# Generate genesis block
-configtxgen -profile EHROrdererGenesis -channelID system-channel -outputBlock .\channel-artifacts\genesis.block
-
-# Generate channel creation transaction
-configtxgen -profile EHRChannel -outputCreateChannelTx .\channel-artifacts\ehr-channel.tx -channelID ehr-channel
-
-# Generate anchor peer updates
-configtxgen -profile EHRChannel -outputAnchorPeersUpdate .\channel-artifacts\HospitalMSPanchors.tx -channelID ehr-channel -asOrg HospitalMSP
-configtxgen -profile EHRChannel -outputAnchorPeersUpdate .\channel-artifacts\PatientMSPanchors.tx -channelID ehr-channel -asOrg PatientMSP
-```
-
-### Step 3: Start the Network
-
-```powershell
-# Windows PowerShell
+# Start everything
 .\network.ps1 up
 ```
 
-This will:
-1. Start CouchDB containers (4 instances)
-2. Start Orderer node
-3. Start Peer nodes (4 peers - 2 per org)
-4. Start CLI container
+This command automatically:
+1. Generates cryptographic material using Docker
+2. Creates channel genesis block
+3. Starts CouchDB containers
+4. Starts orderer and peer nodes
+5. Creates channel "ehr-channel"
+6. Joins all peers to the channel
+
+### Step 2: Verify Network Status
+
+```powershell
+# Check containers
+docker ps
+
+# Should see 10 containers:
+# - orderer.ehr.com
+# - peer0.hospital.ehr.com, peer1.hospital.ehr.com
+# - peer0.patient.ehr.com, peer1.patient.ehr.com
+# - couchdb0.hospital, couchdb1.hospital
+# - couchdb0.patient, couchdb1.patient
+# - cli
+
+# Verify channel
+docker exec cli peer channel list
+# Output: ehr-channel
+
+# Check channel info
+docker exec cli peer channel getinfo -c ehr-channel
+```
 
 ### Step 4: Verify Network
 

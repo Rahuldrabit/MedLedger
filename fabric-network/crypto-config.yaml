@@ -1,13 +1,14 @@
 ---
-Organizations:
+OrdererOrgs:
   - Name: OrdererOrg
-    Domain: orderer.ehr.com
+    Domain: ehr.com
     EnableNodeOUs: true
     Specs:
       - Hostname: orderer
     Users:
       Count: 1
 
+PeerOrgs:
   - Name: HospitalOrg
     Domain: hospital.ehr.com
     EnableNodeOUs: true

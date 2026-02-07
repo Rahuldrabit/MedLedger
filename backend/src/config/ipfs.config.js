@@ -1,25 +1,23 @@
-const { create } = require('ipfs-http-client');
 const logger = require('../utils/logger');
 
 class IPFSConfig {
     constructor() {
         this.client = null;
+        this.fs = null;
         this.host = process.env.IPFS_HOST || '127.0.0.1';
         this.port = process.env.IPFS_PORT || 5001;
         this.protocol = process.env.IPFS_PROTOCOL || 'http';
+        this.apiUrl = `${this.protocol}://${this.host}:${this.port}/api/v0`;
     }
 
     /**
      * Get IPFS client instance
      */
-    getClient() {
+    async getClient() {
         if (!this.client) {
-            this.client = create({
-                host: this.host,
-                port: this.port,
-                protocol: this.protocol
-            });
-            logger.info(`IPFS client connected to ${this.protocol}://${this.host}:${this.port}`);
+            // For HTTP client, we'll use fetch-based approach
+            logger.info(`IPFS client configured for ${this.protocol}://${this.host}:${this.port}`);
+            this.client = true; // Mark as initialized
         }
         return this.client;
     }
@@ -32,14 +30,20 @@ class IPFSConfig {
      */
     async addFile(fileBuffer, options = {}) {
         try {
-            const client = this.getClient();
-            const result = await client.add(fileBuffer, {
-                pin: true,
-                ...options
+            await this.getClient();
+            
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('file', fileBuffer);
+
+            const response = await fetch(`${this.apiUrl}/add?pin=true`, {
+                method: 'POST',
+                body: form
             });
 
-            logger.info(`File added to IPFS: ${result.path}`);
-            return result.path; // CID
+            const result = await response.json();
+            logger.info(`File added to IPFS: ${result.Hash}`);
+            return result.Hash; // CID
         } catch (error) {
             logger.error('Error adding file to IPFS:', error);
             throw error;
@@ -53,14 +57,18 @@ class IPFSConfig {
      */
     async getFile(cid) {
         try {
-            const client = this.getClient();
-            const chunks = [];
+            await this.getClient();
 
-            for await (const chunk of client.cat(cid)) {
-                chunks.push(chunk);
+            const response = await fetch(`${this.apiUrl}/cat?arg=${cid}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to retrieve file: ${response.statusText}`);
             }
 
-            const fileBuffer = Buffer.concat(chunks);
+            const arrayBuffer = await response.arrayBuffer();
+            const fileBuffer = Buffer.from(arrayBuffer);
             logger.info(`File retrieved from IPFS: ${cid}`);
             return fileBuffer;
         } catch (error) {
@@ -75,8 +83,16 @@ class IPFSConfig {
      */
     async pinFile(cid) {
         try {
-            const client = this.getClient();
-            await client.pin.add(cid);
+            await this.getClient();
+            
+            const response = await fetch(`${this.apiUrl}/pin/add?arg=${cid}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to pin file: ${response.statusText}`);
+            }
+
             logger.info(`File pinned: ${cid}`);
         } catch (error) {
             logger.error(`Error pinning file (${cid}):`, error);
@@ -90,8 +106,16 @@ class IPFSConfig {
      */
     async unpinFile(cid) {
         try {
-            const client = this.getClient();
-            await client.pin.rm(cid);
+            await this.getClient();
+            
+            const response = await fetch(`${this.apiUrl}/pin/rm?arg=${cid}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to unpin file: ${response.statusText}`);
+            }
+
             logger.info(`File unpinned: ${cid}`);
         } catch (error) {
             logger.error(`Error unpinning file (${cid}):`, error);
